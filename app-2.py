@@ -105,14 +105,8 @@ STATE = get_state()
 STATE['current_step'] = 0
 
 STATE['tracks'] = [
-    # {'channel': 0, 'stutter': True, 'volume': 1, 'sample_id': 'dt_kick_big.wav', 'grid': [0,4,8,12]},
     {'channel': 0, 'stutter': False, 'volume': 0, 'sample_id': 'hat-loop.wav', 'grid': [0]},
     {'channel': 1, 'stutter': True, 'volume': 1, 'sample_id': 'kick.wav', 'grid': [0]},
-    # {'channel': 3, 'stutter': True, 'volume': 1, 'sample_id': 'HiHat 17.wav', 'grid': [1,2,3,4,6,8,10,14]},
-    # {'channel': 1, 'stutter': False, 'volume': 0, 'sample_id': 'RK_DT4_Beat_Loop_09_124bpm.wav', 'grid': [0,4,8,12]},
-    # {'channel': 2, 'stutter': False, 'volume': 1, 'sample_id': 'RK_DT4_Bass_Loop_24_125bpm_C.wav', 'grid': [0]},
-    # {'channel': 3, 'stutter': False, 'volume': 0, 'sample_id': 'Echo Noise Burst 01.wav', 'grid': [0]},
-    # {'channel': 3, 'stutter': True, 'volume': 1, 'sample_id': 'HiHat 17.wav', 'grid': [1,2,3,4,6,8,10,14]},
 ]
 
 # print(CHANNELS[0])
@@ -229,8 +223,6 @@ def audioManager():
             shuffle_track(random_track)
 
         step = step + 1
-
-        
 
         GOAL += DELTA
 
