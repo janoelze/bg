@@ -1,10 +1,14 @@
 import sys, time, random
-import json, pygame
+import json
 import os.path
 import gc
 import glob
 import random
 import soundfile as sf
+import contextlib
+
+with contextlib.redirect_stdout(None):
+    import pygame
 
 from time import time, sleep
 from datetime import datetime
@@ -18,7 +22,7 @@ from PyQt5.QtCore import Qt
 
 from waveform import Waveform
 
-from threading import Thread#
+from threading import Thread
 
 # ram stores
 
@@ -27,6 +31,10 @@ _sound_library = {}
 # config
 
 CONFIG = {
+    'app_name': 'bg @ 0.1',
+    'window_width': 500,
+    'window_height': 400,
+    'channel_num': 4,
     'store_dir': 'data/',
     'waveforms_dir': 'waveforms/',
     'samples_dir': 'samples/',
@@ -36,8 +44,7 @@ CONFIG = {
 # helper
 
 def log(msg):
-    now = datetime.now()
-    print('%s: %s' % (now.strftime("%H:%M:%S"), msg))
+    print('%s: %s' % (datetime.utcnow().strftime('%M:%S.%f')[:-4], msg))
 
 def get_state():
     if path.exists(CONFIG['store_dir'] + '/state.json'):
@@ -52,6 +59,9 @@ def get_state():
 def set_state(state):
     with open(CONFIG['store_dir'] + '/state.json', 'w') as outfile:
         return json.dump(state, outfile)
+
+def quit_app():
+    print('quit')
 
 def load_samples():
     count = len(glob.glob(CONFIG['samples_dir'] + '/*.wav'))
@@ -86,38 +96,39 @@ def load_samples():
 
 # audio channel init
 
-pygame.mixer.pre_init(44100, -16, 2, 256)
-pygame.mixer.init()
-pygame.init()
+with contextlib.redirect_stdout(None):
+    pygame.mixer.pre_init(44100, -16, 2, 256)
+    pygame.mixer.init()
+    pygame.init()
 
-CHANNELS = [
-    pygame.mixer.Channel(0),
-    pygame.mixer.Channel(1),
-    pygame.mixer.Channel(2),
-    pygame.mixer.Channel(3),
-    pygame.mixer.Channel(4)
-]
+CHANNELS = []
+
+for i in range(0, CONFIG['channel_num']):
+    CHANNELS.append(pygame.mixer.Channel(i))
 
 # recover state
 
 STATE = get_state()
 
 STATE['current_step'] = 0
+STATE['bpm'] = 122
 
 STATE['tracks'] = [
-    # {'channel': 0, 'stutter': True, 'volume': 1, 'sample_id': 'dt_kick_big.wav', 'grid': [0,4,8,12]},
-    {'channel': 0, 'stutter': False, 'volume': 0, 'sample_id': 'dt_hat_bart.wav', 'grid': [0]},
-    # {'channel': 2, 'stutter': True, 'volume': 1, 'sample_id': 'dt_fxloop_120_below.wav', 'grid': [0]},
-    # {'channel': 3, 'stutter': True, 'volume': 1, 'sample_id': 'HiHat 17.wav', 'grid': [1,2,3,4,6,8,10,14]},
-    {'channel': 1, 'stutter': False, 'volume': 0, 'sample_id': 'RK_DT4_Beat_Loop_09_124bpm.wav', 'grid': [0,4,8,12]},
-    {'channel': 2, 'stutter': False, 'volume': 1, 'sample_id': 'RK_DT4_Bass_Loop_24_125bpm_C.wav', 'grid': [0]},
-    {'channel': 3, 'stutter': False, 'volume': 0, 'sample_id': 'Echo Noise Burst 01.wav', 'grid': [0]},
-    # {'channel': 3, 'stutter': True, 'volume': 1, 'sample_id': 'HiHat 17.wav', 'grid': [1,2,3,4,6,8,10,14]},
+    {'channel': 0, 'stutter': False, 'volume': 1, 'sample_id': 'dt_synth_122_sing_G#m.wav', 'grid': [0]},
+    {'channel': 1, 'stutter': True, 'volume': 1, 'sample_id': 'kick.wav', 'grid': [0,4,8,12]},
+    {'channel': 2, 'stutter': True, 'volume': 1, 'sample_id': 'hat-2.wav', 'grid': [0,2,4,8,10,11,12]},
+    {'channel': 3, 'stutter': True, 'volume': 1, 'sample_id': 'hat-3.wav', 'grid': [0,2,4,8,10,11,12]},
 ]
 
 # print(CHANNELS[0])
 
 set_state(STATE)
+
+# hey!
+
+window = {}
+
+log('hey!')
 
 # load library
 
@@ -127,50 +138,132 @@ class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # self.actionExit.setShortcutContext(QtCore.Qt.ApplicationShortcut)
+        self.shortcut = QShortcut(QKeySequence("ESCAPE"), self)
+        self.shortcut.activated.connect(self.on_quit)
+
+        self.shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        self.shortcut.activated.connect(self.on_quit)
+
+        self.window_width = CONFIG['window_width']
+        self.window_height = CONFIG['window_height']
+
+        self.tracks_padding_left = 20
+        self.tracks_padding_right = 20
+
         self.label = QtWidgets.QLabel()
-        canvas = QtGui.QPixmap(400, 300)
+        canvas = QtGui.QPixmap(self.window_width, self.window_height)
+
+        self.setWindowTitle(CONFIG['app_name'])
+        self.setFixedSize(self.window_width, self.window_height)
 
         self.label.setPixmap(canvas)
         self.setCentralWidget(self.label)
-        self.draw_something()
+        self.draw()
 
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.draw_something)
-        self.timer.start(50)
+        self.btn = QPushButton("play", self)
+        # self.btn.clicked.connect(self.draw())
+        self.btn.move(10, 10)
 
-    def draw_something(self):
-        painter = QtGui.QPainter(self.label.pixmap())
+        # self.timer = QtCore.QTimer()
+        # self.timer.timeout.connect(self.draw)
+        # self.timer.start(70)
 
-        def drawTracks(painter):
-            x = random.randint(0,100)
-            y = random.randint(0,100)
+    def on_quit(self):
+        STATE['do_quit'] = True
+        exit()
 
-            width = 40
+    def draw(self):
+        p = QtGui.QPainter(self.label.pixmap())
+
+        p.fillRect(self.rect(), QColor(0, 0, 0, 190))
+
+        def draw_tracks(p):
+            tracks_width = (self.window_width - (self.tracks_padding_left + self.tracks_padding_right))
+
+            steps = 16 * STATE['bars']
+
+            track_cell_height = 90
+            track_cell_width = tracks_width / steps
+
             y = 0
-            for n in range(0,4):
-                for x in range(0,8):
-                    painter.drawImage(
-                        QtCore.QRect(x*width, y, width, width),
-                        QtGui.QImage("waveforms/Abletunes TSD Snare 27.gif")
-                    )
-                y = y + width
+            for track in STATE['tracks']:
+                for step in range(0, (16 * STATE['bars'])):
+                    # p.setBrush(QBrush(Qt.green, Qt.DiagCrossPattern))
+                    # p.drawRect(self.tracks_padding_left+(step*track_cell_width), y*track_cell_height, track_cell_width,track_cell_height)
 
-        def drawCursor(painter):
+                    # waveform_path = track['sample_id'].replace(
+                    #     CONFIG['samples_dir'],
+                    #     CONFIG['waveforms_dir']
+                    # ).replace('.wav', '.gif')
+
+                    # print(waveform_path)
+
+                    ahead = 0
+
+                    for n in range(step, (16 * STATE['bars'])):
+                        if n not in track['grid']:
+                            ahead = ahead + 1
+                        else:
+                            break
+
+                    if step in track['grid']:
+                        p.drawImage(
+                            QtCore.QRect(
+                                self.tracks_padding_left+((step+ahead)*track_cell_width),
+                                y*track_cell_height,
+                                track_cell_height,
+                                track_cell_width
+                            ),
+                            QtGui.QImage('%s/%s' % (CONFIG['waveforms_dir'], track['sample_id'].replace('.wav', '.gif')))
+                        )
+                y = y + 1
+
+            # y = 0
+            # for n in range(0,4):
+            #     for x in range(0,8):
+            #         p.drawRect(y, st, 400,200)
+                    # p.drawImage(
+                    #     QtCore.QRect(x*width, y, width, width),
+                    #     QtGui.QImage("waveforms/Abletunes TSD Snare 27.gif")
+                    # )
+            #     y = y + width
+
+        def draw_cursor(p):
             pen = QPen(Qt.white, 3)
-            painter.setPen(pen)
-            painter.drawLine(random.randint(0,100), random.randint(0,100), random.randint(0,100), random.randint(0,100))
+            p.setPen(pen)
 
-        def drawText(painter):
-            # bpm
-            painter.drawText(random.randint(0,100), random.randint(0,100), str(STATE['bpm']))
+            steps = 16 * STATE['bars']
+            
+            tracks_width = (self.window_width - (self.tracks_padding_left + self.tracks_padding_right))
 
-        drawTracks(painter)
-        drawCursor(painter)
-        drawText(painter)
+            x = (tracks_width/steps) * STATE['current_step']
 
-        painter.end()
+            p.drawLine(
+                x,
+                0,
+                x,
+                self.window_height
+                )
+
+        def draw_text(p):
+            p.drawText(
+                random.randint(0,100),
+                random.randint(0,100),
+                str(STATE['bpm'])
+                )
+
+        draw_tracks(p)
+        draw_cursor(p)
+        draw_text(p)
+
+        p.end()
 
         self.update()
+
+def update_window():
+    if window:
+        window.draw()
 
 def audioManager():
     def shuffle_track(TRACK):
@@ -198,9 +291,14 @@ def audioManager():
         if step >= max_steps:
             step = 0
 
+        update_window()
+
         STATE['current_step'] = step
 
         play_output = []
+
+        if 'do_quit' in STATE and STATE['do_quit']:
+            exit()
 
         for TRACK in STATE['tracks']:
             channel = CHANNELS[TRACK['channel']]
@@ -218,7 +316,7 @@ def audioManager():
                         channel.stop()
 
                     play(channel, TRACK['sample_id'])
-                    play_output.append('[%s]' % TRACK['sample_id'][0:5])
+                    play_output.append('[%s]' % TRACK['sample_id'][0:6])
 
         log('playing %s' % (' '.join(play_output)))
 
@@ -229,8 +327,6 @@ def audioManager():
             shuffle_track(random_track)
 
         step = step + 1
-
-        
 
         GOAL += DELTA
 
@@ -247,6 +343,9 @@ if __name__ == '__main__':
     Thread(target = audioManager).start()
 
     app = QtWidgets.QApplication(sys.argv)
+    
     window = MainWindow()
     window.show()
     app.exec_()
+
+

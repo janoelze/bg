@@ -90,13 +90,12 @@ pygame.mixer.pre_init(44100, -16, 2, 256)
 pygame.mixer.init()
 pygame.init()
 
-CHANNELS = [
-    pygame.mixer.Channel(0),
-    pygame.mixer.Channel(1),
-    pygame.mixer.Channel(2),
-    pygame.mixer.Channel(3),
-    pygame.mixer.Channel(4)
-]
+CHANNELS = []
+
+for i in range(0,4):
+    CHANNELS.append(pygame.mixer.Channel(i))
+
+print(CHANNELS)
 
 # recover state
 
@@ -105,7 +104,7 @@ STATE = get_state()
 STATE['current_step'] = 0
 
 STATE['tracks'] = [
-    {'channel': 0, 'stutter': False, 'volume': 0, 'sample_id': 'hat-loop.wav', 'grid': [0]},
+    {'channel': 0, 'stutter': False, 'volume': 1, 'sample_id': 'hat-loop.wav', 'grid': [0]},
     {'channel': 1, 'stutter': True, 'volume': 1, 'sample_id': 'kick.wav', 'grid': [0]},
 ]
 
