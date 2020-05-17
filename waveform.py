@@ -1,11 +1,88 @@
 import sys
 
+import contextlib
+with contextlib.redirect_stdout(None):
+    import pygame
+
 from pydub import AudioSegment
 from PIL import Image, ImageDraw
+import numpy as np
+
+_wv_store = {}
+
+def draw_waveform_array(screen, src, bars, y_offset, bar_height, bpm):
+    BARS = bars
+    BAR_HEIGHT = bar_height
+    LINE_WIDTH = 5
+    db_ceiling = 60
+
+    if src not in _wv_store or _wv_store[src]['bars'] != bars:
+        _wv_store[src] = {
+            'obj': AudioSegment.from_file(src),
+            'bars': bars,
+        }
+
+        audio_file = _wv_store[src]['obj']
+
+        chunk_length = len(audio_file) / BARS
+
+        loudness_of_chunks = [
+            audio_file[i * chunk_length: (i + 1) * chunk_length].rms
+            for i in range(BARS)]
+
+        max_rms = max(loudness_of_chunks) * 1.00
+
+        _wv_store[src]['max_array'] = [int((loudness / max_rms) * db_ceiling)
+                for loudness in loudness_of_chunks]
+
+        # STATE['bpm']
+
+        # print(audio.duration_seconds)
+
+        # data = np.fromstring(audio._data, np.int16)
+        # fs = audio.frame_rate
+
+        # length = len(data)
+        # RATIO = length/BARS
+
+        # count = 0
+        # maximum_item = 0
+        # _wv_store[src]['max_array'] = []
+        # highest_line = 0
+
+        # for d in data:
+        #     if count < RATIO:
+        #         count = count + 1
+
+        #         if abs(d) > maximum_item:
+        #             maximum_item = abs(d)
+        #     else:
+        #         _wv_store[src]['max_array'].append(maximum_item)
+
+        #         if maximum_item > highest_line:
+        #             highest_line = maximum_item
+
+        #         maximum_item = 0
+        #         count = 1
+
+        # _wv_store[src]['line_ratio'] = highest_line/BAR_HEIGHT
+
+        # print(_wv_store[src]['max_array'])
+
+    current_x = 1
+
+    for item in _wv_store[src]['max_array']:
+        item_height = item
+        current_y = (BAR_HEIGHT - item_height)/2
+
+        # print('draw', current_y)
+
+        pygame.draw.line(screen, (255,255,255), (current_x,current_y+y_offset),(current_x,current_y + item_height+y_offset), 2)
+
+        current_x = current_x + 4
 
 
 class Waveform(object):
-
     bar_count = 107
     db_ceiling = 60
 

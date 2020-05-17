@@ -1,4 +1,5 @@
 import sys, time, random
+from time import sleep, perf_counter
 import json
 import os.path
 import gc
@@ -281,6 +282,13 @@ def audioManager():
         if sample_id in _sound_library:
             channel.play(_sound_library[sample_id])
 
+    delay = d = 60 / 120
+    print(60 / delay, 'bpm')
+    prev = perf_counter()
+
+    # for i in range(20):
+        
+
     DELTA = (60/(STATE['bpm'] * 4))
     GOAL = time()
 
@@ -328,24 +336,31 @@ def audioManager():
 
         step = step + 1
 
-        GOAL += DELTA
+        sleep(d)
+        t = perf_counter()
+        delta = t - prev - delay
+        print('{:+.9f}'.format(delta))
+        d -= delta
+        prev = t
 
-        gc.collect()
+        # GOAL += DELTA
 
-        sleepInterval = GOAL - time()
+        # gc.collect()
 
-        if sleepInterval >= 0:
-            sleep(sleepInterval)
-        else:
-            sleep(0)
+        # sleepInterval = GOAL - time()
+
+        # if sleepInterval >= 0:
+        #     sleep(sleepInterval)
+        # else:
+        #     sleep(0)
 
 if __name__ == '__main__':
     Thread(target = audioManager).start()
 
-    app = QtWidgets.QApplication(sys.argv)
+    # app = QtWidgets.QApplication(sys.argv)
     
-    window = MainWindow()
-    window.show()
-    app.exec_()
+    # window = MainWindow()
+    # window.show()
+    # app.exec_()
 
 
