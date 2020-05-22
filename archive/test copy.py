@@ -5,6 +5,7 @@ import time, math
 from threading import Thread
 from math import floor
 import contextlib
+
 with contextlib.redirect_stdout(None):
     import pygame
 
@@ -13,7 +14,7 @@ import os.path
 import glob
 import random
 import soundfile as sf
-from waveform import Waveform, draw_waveform_array
+from waveform import Waveform, draw_waveform_array, draw_waveform_cell, get_waveform_data
 from os import path
 # from time import time, sleep
 from datetime import datetime
@@ -30,9 +31,10 @@ _image_library = {}
 CONFIG = {
     'app_name': 'bg @ 0.1',
     'fps': 20,
-    'window_width': 500,
+    'window_width': 600,
     'window_height': 400,
     'channel_num': 4,
+    'bars': 1,
     'store_dir': 'data/',
     'waveforms_dir': 'waveforms/',
     'samples_dir': 'samples/',
@@ -51,7 +53,7 @@ def get_state():
     else:
         return {
             'bpm': 120,
-            'bars': 1
+            'bars': CONFIG['bars']
         }
 
 def play(channel, sample_id):
@@ -117,13 +119,14 @@ STATE = get_state()
 
 STATE['current_step'] = 0
 STATE['max_steps'] = 0
-STATE['bpm'] = 125
+STATE['bpm'] = 120
+STATE['volume'] = 0.3
 
 STATE['tracks'] = [
     # {'channel': 0, 'locked': False, 'stutter': False, 'volume': 1, 'sample_id': 'PRCT_123_E_Synth_Loop_4_Wet copy 4.wav', 'grid': [0,2]},
-    {'channel': 1, 'locked': True, 'stutter': False, 'volume': 1, 'sample_id': 'RK_DT4_Beat_Loop_23_125bpm.wav', 'grid': [0,4,8,12]},
-    {'channel': 2, 'locked': False, 'stutter': False, 'volume': 0.3, 'sample_id': 'RK_DT4_HiHat_Loop_18_125bpm.wav', 'grid': [0]},
-    {'channel': 3, 'locked': False, 'stutter': False, 'volume': 0.7, 'sample_id': 'hat-3.wav', 'grid': [2,6,10,14]},
+    {'channel': 1, 'locked': False, 'stutter': True, 'volume': 1, 'sample_id': 'Ensemble [120] F AgingGold 1.wav', 'grid': [0,4,6]},
+    {'channel': 2, 'locked': False, 'stutter': True, 'volume': 1, 'sample_id': 'kick.wav', 'grid': [0,4,8,12]},
+    # {'channel': 3, 'locked': False, 'stutter': False, 'volume': 1, 'sample_id': 'hat-3.wav', 'grid': [2,6,10,14]},
 ]
 
 # print(CHANNELS[0])
@@ -146,22 +149,28 @@ class Gabber(object):
         Thread(target = self.run).start()
 
     def shuffle_track(self):
+        # track = random.choice(STATE['tracks'])
+        # print('shuffle')
         random_track = False
 
-        while not random_track:
-            track = random.choice(STATE['tracks'])
+        ctracks_cop = STATE['tracks'].copy()
+        random.shuffle(ctracks_cop)
+
+        for track in ctracks_cop:
             if 'locked' not in track or not track['locked']:
                 random_track = track
+                break
 
-        inc = random.randint(1,8)
-        new_grid = []
-        s = 0
+        if random_track:
+            inc = random.randint(1,8)
+            new_grid = []
+            s = 0
 
-        while s <= self.max_steps:
-            new_grid.append(s)
-            s = s + inc
+            while s <= self.max_steps:
+                new_grid.append(s)
+                s = s + inc
 
-        random_track['grid'] = new_grid
+            random_track['grid'] = new_grid
 
     def run(self):
         global RUN
@@ -170,12 +179,12 @@ class Gabber(object):
         start = time.time()
 
         while RUN:
-            if self.current_step >= self.max_steps:
-                self.current_step = 0
+            if STATE['current_step'] >= STATE['max_steps']:
+                STATE['current_step'] = 0
 
             # update_window()
 
-            STATE['current_step'] = self.current_step
+            # STATE['current_step'] = self.current_step
 
             play_output = []
 
@@ -187,13 +196,13 @@ class Gabber(object):
                 sample_id = TRACK['sample_id']
 
                 if 'volume' in TRACK:
-                    channel.set_volume(TRACK['volume'])
+                    channel.set_volume(TRACK['volume'] * STATE['volume'])
 
                 if 'stutter' in TRACK and TRACK['stutter']:
-                    channel.set_volume(random.randint(80,100)/100)
+                    channel.set_volume((TRACK['volume'] * STATE['volume']) * random.randint(70,100)/100)
 
                 if 'sample_id' in TRACK and 'grid' in TRACK and TRACK['sample_id']:
-                    if self.current_step in TRACK['grid']:
+                    if STATE['current_step'] in TRACK['grid']:
                         if channel.get_busy():
                             channel.stop()
 
@@ -204,11 +213,13 @@ class Gabber(object):
 
             # print('%s/%s %s' % (step, max_steps, ))
 
-            if self.current_step % 8 == 0 and random.randint(0,100) > 70:
+            if random.randint(0,100) > 90:
                 self.shuffle_track()
 
-            self.current_step = self.current_step + 1
-            STATE['current_step'] = self.current_step
+            # self.current_step = self.current_step + 1
+            # STATE['current_step'] = self.current_step
+
+            STATE['current_step'] = STATE['current_step'] + 1
 
             clock.wait((60/STATE['bpm'])/4)
 
@@ -240,7 +251,7 @@ def main():
     GRAY = (150, 150, 150)
 
     def draw():
-        steps = 16 * STATE['bars']
+        TOTAL_STEPS = 16 * STATE['bars']
 
         screen.fill((0,0,0))
 
@@ -251,10 +262,12 @@ def main():
         )
 
         txt_step = font.render(
-            str('%s/%s' % (STATE['current_step'], STATE['max_steps'])),
+            str('%s/%s' % (STATE['current_step'], TOTAL_STEPS)),
             True,
             (255,255,255)
         )
+
+        # print(STATE['current_step'])
 
         screen.blit(txt_time,(0, 0))
         screen.blit(txt_step,(0, 20))
@@ -264,27 +277,228 @@ def main():
         tracks_padding_left = 40
         tracks_padding_right = 20
 
-        tracks_width = (CONFIG['window_width'] - (tracks_padding_left + tracks_padding_right))
+        tracks_width = CONFIG['window_width']
 
-        track_cell_height = 90
-        track_cell_width = tracks_width / steps
+        track_cell_height = 70
+        track_cell_width = tracks_width / TOTAL_STEPS
 
-        y = 0
-        for track in STATE['tracks']:
-            draw_waveform_array(screen, '%s/%s' % (CONFIG['samples_dir'], track['sample_id']), floor(CONFIG['window_width']/4), y*track_cell_height, track_cell_height, STATE['bpm'])
-            y = y + 1
+        grid_left = 0
+        beat = 0
+
+        for x in range(0, TOTAL_STEPS):
+            if grid_left > 0:
+                if beat >= 4:
+                    pygame.draw.line(screen, (50,50,50), (grid_left,0),(grid_left, CONFIG['window_height']), 1)
+                    beat = 0
+                else:
+                    pygame.draw.line(screen, (30,30,30), (grid_left,0),(grid_left, CONFIG['window_height']), 1)
+
+            beat = beat + 1
+            grid_left = grid_left + track_cell_width
+
+        # print(track_cell_width)
+
+        # y = 0
+
+        # for track in STATE['tracks']:
+        #     sample_filename ='%s/%s' % (CONFIG['samples_dir'], track['sample_id'])
+        #     for x in range(0, steps+1):
+        #         if x in track['grid']:
+        #             multiplier = 0
+
+        #             for lookahead in range(0,16):
+        #                 if (x + lookahead) not in track['grid']:
+        #                     multiplier = multiplier + 1
+        #                 else:
+        #                     break
+
+        #             draw_waveform_cell(screen, sample_filename, x * track_cell_width, y*track_cell_height, track_cell_height, track_cell_width)
+        #         else:
+        #             draw_waveform_cell(screen, 'n/a', x * track_cell_width, y*track_cell_height, track_cell_height, track_cell_width)
+        #     # draw_waveform_array(screen, '%s/%s' % (CONFIG['samples_dir'], track['sample_id']), floor(CONFIG['window_width']/4), y*track_cell_height, track_cell_height, STATE['bpm'])
+        #     y = y + 1
 
         # draw cursor
 
-        
+        posy = 0
+
+        for track in STATE['tracks']:
+            sample_filename ='%s/%s' % (CONFIG['samples_dir'], track['sample_id'])
+            wv_data = get_waveform_data(sample_filename)
+
+            sorted_hits = sorted(track['grid'])
+
+            def draw_hit(wv_data, sorted_hits, posx):
+                length = 1
+
+                for s in range(0, TOTAL_STEPS):
+                    has_next = ((hit+s) not in sorted_hits)
+                    if not has_next:
+                        length = length + 1
+                    else:
+                        break
+
+                for bar_num in range(1, int((track_cell_width*length))+1):
+                    value = 0
+
+                    try:
+                        if bar_num <= len(wv_data):
+                            value = wv_data[bar_num]
+                    except Exception as e:
+                        value = 0
+
+                    # curr_y = posy + ((track_cell_height - item_height)/2)
+
+                    item_height = (value*1.5) + random.randint(-2,2)
+                    curr_y = posy + ((track_cell_height - item_height)/2)
+
+                    if posx < (CONFIG['window_width']-4):
+                        pygame.draw.line(
+                            screen,
+                            (255,255,255),
+                            (posx, curr_y),
+                            (posx, curr_y + item_height),
+                            1
+                        )
+
+                    posx = posx + 2
+
+            first_hit = False
+
+            for hit in range(0, TOTAL_STEPS):
+                posx = track_cell_width * hit
+                if hit in sorted_hits:
+                    draw_hit(wv_data, sorted_hits, posx)
+                else:
+                    pass
+                    # if not first_hit:
+                    #     draw_hit([], sorted_hits, posx, first_hit)
+
+
+            posy = posy + track_cell_height
+
+
+            # print(wv_data)
+
+            # draw_step = 0
+            # draw_x = 0
+            BARS = []
+
+            # current_bars = []
+            # total_steps = int(CONFIG['window_width'] / 2)
+
+            # print(int(CONFIG['window_width'] / 16))
+            # exit()
+
+            bars_count = int(CONFIG['window_width'] / 2)
+            step_bar_count = int(bars_count / 16)
+            current_step = 0
+            segment_counter = 0
+            data_index = 0
+
+            bar_counter = 0
+
+            # print(bars_count)
+            # print(step_bar_count)
+            # print(current_step)
+            # print(data_index)
+
+            # print(track['grid'])
+
+            sorted_hits = sorted(track['grid'])
+
+            for bar_num in range(0, bars_count):
+                if bar_counter > step_bar_count:
+                    bar_counter = 0
+                    current_step = current_step + 1
+
+                    if current_step in track['grid']:
+                        data_index = 0
+
+                try:
+                    BARS.append(wv_data[data_index])
+                except Exception as e:
+                    BARS.append(0)
+
+                bar_counter = bar_counter + 1
+
+                # if segment_counter > step_bar_count:
+                #     segments_progressed = segments_progressed + 1
+                #     segment_counter = 0
+
+                # if data_index <= len(wv_data):
+                #     print(wv_data[data_index])
+                #     BARS.append(wv_data[data_index])
+                # else:
+                #     BARS.append(0)
+
+                data_index=data_index+1
+                # segment_counter=segment_counter+1
+
+            posx = 0
+
+            # print(BARS)
+
+            # for column in BARS:
+            #     item_height = (column*1.5) + random.randint(-1,1)
+
+            #     curr_y = posy + ((track_cell_height - item_height)/2)
+            #     # curr_x = posx + x_left 
+
+            #     # if x_left <= int(track_cell_width):
+            #     line_color = (255,255,255)
+
+            #     #     if x_left==0:
+            #     # line_color = (255,0,0)
+
+            #     pygame.draw.line(
+            #         screen,
+            #         line_color,
+            #         (posx, curr_y),
+            #         (posx, curr_y + item_height),
+            #         1
+            #     )
+
+            #     # x_left = x_left + 4
+
+            #     posx = posx + 2
+
+            # posy = posy + track_cell_height
+
+
+
+                # if draw_step in track['grid']:
+                #     array_index = 0
+
+
+                    # print(draw_step)
+                    # for rms in wv_data:
+
+
+                    # for bar_count in range(0, steps_per_bar):
+                    #     print(bar_count)
+
+                #     if bar_count <= len(wv_data):
+                #         current_bars.append(wv_data[bar_count])
+                #     else:
+                #         current_bars.append(0)
+                # if draw_step in track['grid']:
+                #     current_bars = get_waveform_data(sample_filename)
+                # else:
+
+            # 
+
+        # draw cursor
 
         # for i in range(0,steps+1):
         #     pygame.draw.line(screen, (90,90,90), ((track_cell_width*i)+1,0),((track_cell_width*i)+1,CONFIG['window_height']), 1)
 
-        x = (tracks_width/steps) * STATE['current_step']
-        cursor_x = x + 1 + tracks_padding_left
+        # x = (tracks_width/steps) * 
+        cursor_x = (track_cell_width * (STATE['current_step']-1))
 
-        pygame.draw.line(screen, (255,255,255), (cursor_x,0),(cursor_x,CONFIG['window_height']), 2)
+        print(cursor_x)
+
+        pygame.draw.line(screen, (255,255,255), (cursor_x,0),(cursor_x,CONFIG['window_height']), 1)
 
         pygame.display.update()
 

@@ -7,8 +7,153 @@ with contextlib.redirect_stdout(None):
 from pydub import AudioSegment
 from PIL import Image, ImageDraw
 import numpy as np
+import math, random
 
 _wv_store = {}
+
+def get_waveform_data(sample_filename):
+    BARS = 100
+
+    db_ceiling = 30
+    src = sample_filename
+
+    if src == 'n/a':
+        _wv_store[src] = []
+
+        for x in range(1,100):
+            _wv_store[src].append(random.randint(-1,1))
+
+    if src not in _wv_store:
+        audio_file = AudioSegment.from_file(src)
+
+        chunk_length = len(audio_file) / BARS
+
+        loudness_of_chunks = [
+            audio_file[i * chunk_length: (i + 1) * chunk_length].rms
+            for i in range(BARS)]
+
+        # loudness_of_chunks = [
+        #     audio_file[i * chunk_length: (i + 1) * chunk_length].fft()
+        #     for i in range(BARS)]
+
+        # hist_bins, hist_vals = audio_file[0:100].fft()
+        # freqs, times, amplitudes = audio_file[0:100].spectrogram(window_length_s=0.03, overlap=0.5)
+
+        # print(freqs, times, amplitudes)
+        # exit()
+
+        # hist_bins, hist_vals = seg[1:3000]
+# hist_vals_real_normed = np.abs(hist_vals) / len(hist_vals)
+
+        max_rms = max(loudness_of_chunks) * 1.00
+
+        _wv_store[src] = [int((loudness / max_rms) * db_ceiling)
+            for loudness in loudness_of_chunks]
+
+    return _wv_store[src]
+
+def draw_waveform_cell(screen, sample_filename, posx, posy, track_cell_height, track_cell_width):
+    BARS = int(track_cell_width)
+    BAR_HEIGHT = track_cell_height
+
+    db_ceiling = 30
+    src = sample_filename
+
+    if src == 'n/a':
+        _wv_store[src] = []
+
+        for x in range(1,100):
+            _wv_store[src].append(random.randint(-1,1))
+
+    if src not in _wv_store:
+        audio_file = AudioSegment.from_file(src)
+
+        chunk_length = len(audio_file) / BARS
+
+        loudness_of_chunks = [
+            audio_file[i * chunk_length: (i + 1) * chunk_length].rms
+            for i in range(BARS)]
+
+        max_rms = max(loudness_of_chunks) * 1.00
+
+        _wv_store[src] = [int((loudness / max_rms) * db_ceiling)
+            for loudness in loudness_of_chunks]
+
+    i = 0
+
+    x_left = 0
+    first = True
+    if src in _wv_store:
+        for column in _wv_store[src]:
+            item_height = (column*1.5) + random.randint(-1,1)
+
+            curr_y = posy + ((track_cell_height - item_height)/2)
+            curr_x = posx + x_left 
+
+            if x_left <= int(track_cell_width):
+                line_color = (255,255,255)
+
+                if x_left==0:
+                    line_color = (255,0,0)
+
+                pygame.draw.line(
+                    screen,
+                    line_color,
+                    (curr_x, curr_y),
+                    (curr_x, curr_y + item_height),
+                    1
+                )
+
+            x_left = x_left + 4
+
+    # top
+    # pygame.draw.line(
+    #     screen,
+    #     (255,255,255),
+    #     (curr_x, curr_y),
+    #     (curr_x+track_cell_width, curr_y),
+    #     1
+    # )
+
+    # # right
+    # pygame.draw.line(
+    #     screen,
+    #     (255,255,255),
+    #     (curr_x+track_cell_width, curr_y),
+    #     (curr_x+track_cell_width, curr_y+track_cell_height),
+    #     1
+    # )
+
+    # # bottom
+    # pygame.draw.line(
+    #     screen,
+    #     (255,255,255),
+    #     (curr_x, curr_y+track_cell_height),
+    #     (curr_x+track_cell_width, curr_y+track_cell_height),
+    #     1
+    # )
+
+    # # left
+    # pygame.draw.line(
+    #     screen,
+    #     (255,255,255),
+    #     (curr_x, curr_y),
+    #     (curr_x, curr_y+track_cell_height),
+    #     1
+    # )
+
+
+    # for item in _wv_store[src]:
+    #     item_height = item
+    #     curr_y = posy + (BAR_HEIGHT - item_height)/2
+    #     curr_x = posx + (i*2)
+
+    #     # current_y = posy + posy
+
+        
+
+    #     # current_x = current_x + 4
+    #     i = i + 1
 
 def draw_waveform_array(screen, src, bars, y_offset, bar_height, bpm):
     BARS = bars
